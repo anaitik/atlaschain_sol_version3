@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pandas
+langchain-google-genai
+langchain-core
+pydantic
+python-multipart
+py-algorand-sdk
+sqlalchemy
+python-jose[cryptography]
+passlib[bcrypt]
+python-dotenv
+

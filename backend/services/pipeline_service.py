@@ -47,28 +47,51 @@ class PipelineService:
         rows = df.head(5).values.tolist()
         
         # Step 1: Schema Inference Agent
-        def _find_agents_dir(max_ascend: int = 6):
+        def _find_agents_dir(max_ascend: int = 10):
+            # ascend from current file up to root looking for an 'agents' folder
             cur = Path(__file__).resolve().parent
+            tried = []
             for _ in range(max_ascend):
                 candidate = cur / "agents"
+                tried.append(str(candidate))
                 if candidate.exists():
-                    return candidate
-                cur = cur.parent
-            # fallback to cwd
+                    return candidate, tried
+                parent = cur.parent
+                if parent == cur:
+                    break
+                cur = parent
+
+            # try current working directory
             cwd_candidate = Path.cwd() / "agents"
+            tried.append(str(cwd_candidate))
             if cwd_candidate.exists():
-                return cwd_candidate
-            return None
+                return cwd_candidate, tried
+
+            # common container paths
+            for p in [Path("/app/agents"), Path("/workspace/agents"), Path("/agents")]:
+                tried.append(str(p))
+                if p.exists():
+                    return p, tried
+
+            # environment override
+            env_path = os.getenv("AGENTS_DIR")
+            if env_path:
+                env_candidate = Path(env_path)
+                tried.append(str(env_candidate))
+                if env_candidate.exists():
+                    return env_candidate, tried
+
+            return None, tried
 
         def _import_agent(module_filename: str, class_name: str):
-            # First try to import as a normal package (if PYTHONPATH is set)
+            # First try to import as a normal installed package (if PYTHONPATH is set)
             try:
                 mod = importlib.import_module(f"agents.{module_filename}")
                 return getattr(mod, class_name)
             except Exception:
                 pass
 
-            agents_dir = _find_agents_dir()
+            agents_dir, tried_paths = _find_agents_dir()
             attempted_paths = []
             if agents_dir:
                 agent_file = agents_dir / f"{module_filename}.py"
@@ -77,12 +100,19 @@ class PipelineService:
                     spec = importlib.util.spec_from_file_location(f"agents.{module_filename}", str(agent_file))
                     agent_mod = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(agent_mod)
+                    # ensure agent module is importable as 'agents.*' for downstream imports
+                    try:
+                        sys.modules[f"agents.{module_filename}"] = agent_mod
+                    except Exception:
+                        pass
                     return getattr(agent_mod, class_name)
 
-            # Nothing worked; raise with helpful message
+            # Nothing worked; raise with helpful message including all paths we tried
+            full_attempts = tried_paths + attempted_paths
+            print(f"DEBUG: attempted agent import paths: {full_attempts}")
             raise ModuleNotFoundError(
-                f"Agents module not found. Tried: {attempted_paths} and package import 'agents.{module_filename}'. "
-                "Ensure the 'agents' package is present in the project root or PYTHONPATH."
+                f"Agents module not found. Tried: {full_attempts} and package import 'agents.{module_filename}'. "
+                "Ensure the 'agents' package is present in the project root or PYTHONPATH, or set AGENTS_DIR env var to point to it."
             )
 
         SchemaAgent = _import_agent("schema_agent", "SchemaAgent")

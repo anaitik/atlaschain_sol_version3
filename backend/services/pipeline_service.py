@@ -10,12 +10,11 @@ root_dir = backend_dir.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
-
 from typing import Dict, List, Optional
 import pandas as pd
 import importlib.util
 import json
-import os
+
 # Agents imported in methods to avoid circular imports
 from database import Database
 from storage import StorageManager
@@ -47,93 +46,36 @@ class PipelineService:
         headers = list(df.columns)
         rows = df.head(5).values.tolist()
         
-        # Step 1: Schema Inference Agent
-        def _find_agents_dir(max_ascend: int = 10):
-        # ascend from current file up to root looking for 'agents'
-         cur = Path(__file__).resolve().parent
-        tried = []
-        for _ in range(max_ascend):
-            candidate = cur / "agents"        # old
-            candidate = cur.parent / "agents" # new
-            tried.append(str(candidate))
-            if candidate.exists():
-                return candidate, tried
-            parent = cur.parent
-            if parent == cur:
-                break
-            cur = parent
-
-        # try current working directory
-        cwd_candidate = Path.cwd() / "agents"
-        tried.append(str(cwd_candidate))
-        if cwd_candidate.exists():
-            return cwd_candidate, tried
-
-        # common container paths
-        for p in [Path("/app/agents"), Path("/workspace/agents"), Path("/agents")]:
-            tried.append(str(p))
-            if p.exists():
-                return p, tried
-
-        # environment override
-        env_path = os.getenv("AGENTS_DIR")
-        if env_path:
-            env_candidate = Path(env_path)
-            tried.append(str(env_candidate))
-            if env_candidate.exists():
-                return env_candidate, tried
-
-        return None, tried
-
-
-        def _import_agent(module_filename: str, class_name: str):
-            # First try to import as a normal installed package (if PYTHONPATH is set)
-            try:
-                mod = importlib.import_module(f"agents.{module_filename}")
-                return getattr(mod, class_name)
-            except Exception:
-                pass
-
-            agents_dir, tried_paths = _find_agents_dir()
-            attempted_paths = []
-            if agents_dir:
-                agent_file = agents_dir / f"{module_filename}.py"
-                attempted_paths.append(str(agent_file))
-                if agent_file.exists():
-                    spec = importlib.util.spec_from_file_location(f"agents.{module_filename}", str(agent_file))
-                    agent_mod = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(agent_mod)
-                    # ensure agent module is importable as 'agents.*' for downstream imports
-                    try:
-                        sys.modules[f"agents.{module_filename}"] = agent_mod
-                    except Exception:
-                        pass
-                    return getattr(agent_mod, class_name)
-
-            # Nothing worked; raise with helpful message including all paths we tried
-            full_attempts = tried_paths + attempted_paths
-            print(f"DEBUG: attempted agent import paths: {full_attempts}")
-            raise ModuleNotFoundError(
-                f"Agents module not found. Tried: {full_attempts} and package import 'agents.{module_filename}'. "
-                "Ensure the 'agents' package is present in the project root or PYTHONPATH, or set AGENTS_DIR env var to point to it."
-            )
-
-        SchemaAgent = _import_agent("schema_agent", "SchemaAgent")
+        # Step 1: Schema Inference Agent (dynamic import to avoid sys.path issues)
+        agents_dir = Path(__file__).parent.parent.parent / "agents"
+        spec = importlib.util.spec_from_file_location("agents.schema_agent", str(agents_dir / "schema_agent.py"))
+        schema_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(schema_mod)
+        SchemaAgent = schema_mod.SchemaAgent
         schema_agent = SchemaAgent()
         schema = await schema_agent.run(headers, rows, pipeline_name)
-
-        # Step 2: Normalization & Assumptions Agent
-        NormalizationAgent = _import_agent("normalization_agent", "NormalizationAgent")
+        
+        # Step 2: Normalization & Assumptions Agent (dynamic import)
+        spec = importlib.util.spec_from_file_location("agents.normalization_agent", str(agents_dir / "normalization_agent.py"))
+        norm_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(norm_mod)
+        NormalizationAgent = norm_mod.NormalizationAgent
         norm_agent = NormalizationAgent()
         normalization = await norm_agent.run(schema, pipeline_name)
-
-        # Step 3: Metric Intent Agent
-        MetricIntentAgent = _import_agent("metric_intent_agent", "MetricIntentAgent")
+        
+        # Step 3: Metric Intent Agent (dynamic import)
+        spec = importlib.util.spec_from_file_location("agents.metric_intent_agent", str(agents_dir / "metric_intent_agent.py"))
+        metric_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(metric_mod)
+        MetricIntentAgent = metric_mod.MetricIntentAgent
         metric_agent = MetricIntentAgent()
         metric_intent = await metric_agent.run(schema, pipeline_name)
-
-        # Step 4: Code Generation Agent
-        CodeGenAgent = _import_agent("codegen_agent", "CodeGenAgent")
+        
+        # Step 4: Code Generation Agent (dynamic import)
+        spec = importlib.util.spec_from_file_location("agents.codegen_agent", str(agents_dir / "codegen_agent.py"))
+        codegen_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(codegen_mod)
+        CodeGenAgent = codegen_mod.CodeGenAgent
         codegen_agent = CodeGenAgent()
         transform_code = await codegen_agent.run(schema, normalization, metric_intent, pipeline_name)
         

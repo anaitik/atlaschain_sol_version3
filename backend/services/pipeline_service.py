@@ -10,6 +10,7 @@ root_dir = backend_dir.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
+
 from typing import Dict, List, Optional
 import pandas as pd
 import importlib.util
@@ -48,40 +49,42 @@ class PipelineService:
         
         # Step 1: Schema Inference Agent
         def _find_agents_dir(max_ascend: int = 10):
-            # ascend from current file up to root looking for an 'agents' folder
-            cur = Path(__file__).resolve().parent
-            tried = []
-            for _ in range(max_ascend):
-                candidate = cur / "agents"
-                tried.append(str(candidate))
-                if candidate.exists():
-                    return candidate, tried
-                parent = cur.parent
-                if parent == cur:
-                    break
-                cur = parent
+        # ascend from current file up to root looking for 'agents'
+         cur = Path(__file__).resolve().parent
+        tried = []
+        for _ in range(max_ascend):
+            candidate = cur / "agents"        # old
+            candidate = cur.parent / "agents" # new
+            tried.append(str(candidate))
+            if candidate.exists():
+                return candidate, tried
+            parent = cur.parent
+            if parent == cur:
+                break
+            cur = parent
 
-            # try current working directory
-            cwd_candidate = Path.cwd() / "agents"
-            tried.append(str(cwd_candidate))
-            if cwd_candidate.exists():
-                return cwd_candidate, tried
+        # try current working directory
+        cwd_candidate = Path.cwd() / "agents"
+        tried.append(str(cwd_candidate))
+        if cwd_candidate.exists():
+            return cwd_candidate, tried
 
-            # common container paths
-            for p in [Path("/app/agents"), Path("/workspace/agents"), Path("/agents")]:
-                tried.append(str(p))
-                if p.exists():
-                    return p, tried
+        # common container paths
+        for p in [Path("/app/agents"), Path("/workspace/agents"), Path("/agents")]:
+            tried.append(str(p))
+            if p.exists():
+                return p, tried
 
-            # environment override
-            env_path = os.getenv("AGENTS_DIR")
-            if env_path:
-                env_candidate = Path(env_path)
-                tried.append(str(env_candidate))
-                if env_candidate.exists():
-                    return env_candidate, tried
+        # environment override
+        env_path = os.getenv("AGENTS_DIR")
+        if env_path:
+            env_candidate = Path(env_path)
+            tried.append(str(env_candidate))
+            if env_candidate.exists():
+                return env_candidate, tried
 
-            return None, tried
+        return None, tried
+
 
         def _import_agent(module_filename: str, class_name: str):
             # First try to import as a normal installed package (if PYTHONPATH is set)

@@ -47,29 +47,58 @@ class PipelineService:
         rows = df.head(5).values.tolist()
         
         # Step 1: Schema Inference Agent
+        def _find_agents_dir(max_ascend: int = 6):
+            cur = Path(__file__).resolve().parent
+            for _ in range(max_ascend):
+                candidate = cur / "agents"
+                if candidate.exists():
+                    return candidate
+                cur = cur.parent
+            # fallback to cwd
+            cwd_candidate = Path.cwd() / "agents"
+            if cwd_candidate.exists():
+                return cwd_candidate
+            return None
+
         def _import_agent(module_filename: str, class_name: str):
-            agent_file = root_dir / "agents" / f"{module_filename}.py"
-            if not agent_file.exists():
-                raise ModuleNotFoundError(f"Agents module not found at {agent_file}. Ensure the 'agents' package is present in the project root or PYTHONPATH.")
-            spec = importlib.util.spec_from_file_location(f"agents.{module_filename}", str(agent_file))
-            agent_mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(agent_mod)
-            return getattr(agent_mod, class_name)
-        
+            # First try to import as a normal package (if PYTHONPATH is set)
+            try:
+                mod = importlib.import_module(f"agents.{module_filename}")
+                return getattr(mod, class_name)
+            except Exception:
+                pass
+
+            agents_dir = _find_agents_dir()
+            attempted_paths = []
+            if agents_dir:
+                agent_file = agents_dir / f"{module_filename}.py"
+                attempted_paths.append(str(agent_file))
+                if agent_file.exists():
+                    spec = importlib.util.spec_from_file_location(f"agents.{module_filename}", str(agent_file))
+                    agent_mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(agent_mod)
+                    return getattr(agent_mod, class_name)
+
+            # Nothing worked; raise with helpful message
+            raise ModuleNotFoundError(
+                f"Agents module not found. Tried: {attempted_paths} and package import 'agents.{module_filename}'. "
+                "Ensure the 'agents' package is present in the project root or PYTHONPATH."
+            )
+
         SchemaAgent = _import_agent("schema_agent", "SchemaAgent")
         schema_agent = SchemaAgent()
         schema = await schema_agent.run(headers, rows, pipeline_name)
-        
+
         # Step 2: Normalization & Assumptions Agent
         NormalizationAgent = _import_agent("normalization_agent", "NormalizationAgent")
         norm_agent = NormalizationAgent()
         normalization = await norm_agent.run(schema, pipeline_name)
-        
+
         # Step 3: Metric Intent Agent
         MetricIntentAgent = _import_agent("metric_intent_agent", "MetricIntentAgent")
         metric_agent = MetricIntentAgent()
         metric_intent = await metric_agent.run(schema, pipeline_name)
-        
+
         # Step 4: Code Generation Agent
         CodeGenAgent = _import_agent("codegen_agent", "CodeGenAgent")
         codegen_agent = CodeGenAgent()

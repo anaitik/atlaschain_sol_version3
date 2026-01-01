@@ -8,10 +8,7 @@ from pathlib import Path
 # Add parent directory to path to import agents and llm modules
 backend_dir = Path(__file__).parent
 root_dir = backend_dir.parent
-if str(backend_dir) not in sys.path:
-    sys.path.insert(0, str(backend_dir))
-if str(root_dir) not in sys.path:
-    sys.path.insert(0, str(root_dir))
+sys.path.insert(0, str(root_dir))
 
 # Load environment variables from .env
 from dotenv import load_dotenv

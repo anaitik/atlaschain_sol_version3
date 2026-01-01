@@ -47,22 +47,31 @@ class PipelineService:
         rows = df.head(5).values.tolist()
         
         # Step 1: Schema Inference Agent
-        from agents.schema_agent import SchemaAgent
+        def _import_agent(module_filename: str, class_name: str):
+            agent_file = root_dir / "agents" / f"{module_filename}.py"
+            if not agent_file.exists():
+                raise ModuleNotFoundError(f"Agents module not found at {agent_file}. Ensure the 'agents' package is present in the project root or PYTHONPATH.")
+            spec = importlib.util.spec_from_file_location(f"agents.{module_filename}", str(agent_file))
+            agent_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(agent_mod)
+            return getattr(agent_mod, class_name)
+        
+        SchemaAgent = _import_agent("schema_agent", "SchemaAgent")
         schema_agent = SchemaAgent()
         schema = await schema_agent.run(headers, rows, pipeline_name)
         
         # Step 2: Normalization & Assumptions Agent
-        from agents.normalization_agent import NormalizationAgent
+        NormalizationAgent = _import_agent("normalization_agent", "NormalizationAgent")
         norm_agent = NormalizationAgent()
         normalization = await norm_agent.run(schema, pipeline_name)
         
         # Step 3: Metric Intent Agent
-        from agents.metric_intent_agent import MetricIntentAgent
+        MetricIntentAgent = _import_agent("metric_intent_agent", "MetricIntentAgent")
         metric_agent = MetricIntentAgent()
         metric_intent = await metric_agent.run(schema, pipeline_name)
         
         # Step 4: Code Generation Agent
-        from agents.codegen_agent import CodeGenAgent
+        CodeGenAgent = _import_agent("codegen_agent", "CodeGenAgent")
         codegen_agent = CodeGenAgent()
         transform_code = await codegen_agent.run(schema, normalization, metric_intent, pipeline_name)
         

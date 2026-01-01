@@ -80,10 +80,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware
+# CORS middleware - allow frontend domain + localhost for dev
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://atlaschain-frontend-production.up.railway.app")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=[FRONTEND_URL, "http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

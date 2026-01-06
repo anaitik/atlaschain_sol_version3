@@ -510,15 +510,18 @@ async def preview_execution_data(
     execution = db.get_execution(execution_id)
     if not execution:
         raise HTTPException(status_code=404, detail="Execution not found")
-    
+
     output_path = execution.get("output_file_path")
     if not output_path:
         raise HTTPException(status_code=404, detail="No output data available")
-    
+
     try:
         import pandas as pd
         df = pd.read_csv(output_path, nrows=limit)
-        
+
+        # Handle NaN values to make JSON serializable
+        df = df.fillna('')  # Replace NaN with empty string
+
         return {
             "columns": list(df.columns),
             "rows": df.to_dict(orient="records"),
@@ -594,7 +597,7 @@ async def download_execution_report(
 ):
     """Download ESG report as HTML file."""
     report_data = await get_execution_report(execution_id, current_user)
-    
+
     from fastapi.responses import Response
     return Response(
         content=report_data["report"],

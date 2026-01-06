@@ -2,6 +2,9 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
 import os
+from langchain_groq import ChatGroq
+from langchain.chat_models import init_chat_model
+
 
 def get_llm():
     return ChatGoogleGenerativeAI(
@@ -9,6 +12,21 @@ def get_llm():
         temperature=0,
         google_api_key=os.getenv("GOOGLE_API_KEY"),
     )
+    # llm = ChatGroq(
+    # model_name="meta-llama/llama-4-scout-17b-16e-instruct",
+    # temperature=0,
+    # api_key=os.getenv("GROQ_API_KEY"),
+    # )
+    # return llm
+#     model = init_chat_model(
+#     model="xiaomi/mimo-v2-flash:free",
+#         model_provider="openai",  # <-- REQUIRED
+
+#     base_url="https://openrouter.ai/api/v1",
+#     api_key=os.getenv("OPENROUTER_API_KEY")
+# )
+#     return model
+
 
 async def ask_llm(system_prompt: str, user_prompt: str) -> dict:
     llm = get_llm()

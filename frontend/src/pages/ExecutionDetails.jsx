@@ -41,13 +41,44 @@ function ExecutionDetails() {
     fetchData()
   }, [id])
 
-  const handleDownloadReport = () => {
-    window.open(`/api/executions/${id}/download-report`, '_blank')
+  const handleDownloadReport = async () => {
+    try {
+      const response = await client.get(`/api/executions/${id}/download-report`, {
+        responseType: 'blob'
+      })
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `esg_report_${id}.html`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Download failed:', error)
+      alert('Failed to download report')
+    }
   }
 
-  const handleDownloadData = () => {
+  const handleDownloadData = async () => {
     if (execution?.output_file_path) {
-      window.open(`/api/files/${encodeURIComponent(execution.output_file_path)}`, '_blank')
+      try {
+        const response = await client.get(`/api/files/${encodeURIComponent(execution.output_file_path)}`, {
+          responseType: 'blob'
+        })
+        const url = window.URL.createObjectURL(new Blob([response.data]))
+        const link = document.createElement('a')
+        link.href = url
+        const filename = execution.output_file_path.split('/').pop() || `data_${id}.csv`
+        link.setAttribute('download', filename)
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        window.URL.revokeObjectURL(url)
+      } catch (error) {
+        console.error('Download failed:', error)
+        alert('Failed to download data')
+      }
     }
   }
 

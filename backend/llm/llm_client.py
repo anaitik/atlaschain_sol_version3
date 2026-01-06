@@ -2,8 +2,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
 import os
-from langchain_groq import ChatGroq
-from langchain.chat_models import init_chat_model
+# from langchain_groq import ChatGroq
+# from langchain.chat_models import init_chat_model
 
 
 def get_llm():
